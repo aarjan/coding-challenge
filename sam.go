@@ -16,15 +16,30 @@ func main() {
 	r1 := csv.NewReader(f1)
 	r2 := csv.NewReader(f2)
 
+	// vlans headers
 	_, _ = r1.Read()
+	// request headers
+	_, _ = r2.Read()
+
 	vlans, _ := r1.ReadAll()
-	_, _ = r2.ReadAll()
+	requests, _ := r2.ReadAll()
 
 	graph := NewGraph(vlans)
 	graph.populateGraph()
-	for keys, val := range graph.nodeMap {
-		val.nodesCount = mapper(append(val.primaryDevices, val.secondaryDevices...))
-		fmt.Printf("%#v,%#v\n", keys, val)
+	for key, val := range graph.nodeMap {
+		var keys []int
+		for k := range val.primaryDevices {
+			keys = append(keys, k)
+		}
+		for k := range val.secondaryDevices {
+			keys = append(keys, k)
+		}
+		val.commonDevices = mapper(keys)
+		fmt.Printf("%#v,%#v\n", key, val)
+	}
+	output := perfromMapping(graph, requests)
+	for _, o := range output {
+		fmt.Println(o)
 	}
 }
 
@@ -39,125 +54,116 @@ func NewGraph(vlans [][]string) *networkGraph {
 
 func (g *networkGraph) populateGraph() {
 	for _, v := range g.vlans {
-		id, _ := strconv.Atoi(v[0])
+
+		vlanID, _ := strconv.Atoi(v[2])
 		node := &vlanNode{}
-		if n, ok := g.nodeMap[id]; ok {
+
+		if n, ok := g.nodeMap[vlanID]; ok {
 			node = n
 		} else {
-			node = &vlanNode{nodeID: id}
-			g.nodeMap[id] = node
+			node = &vlanNode{
+				nodeID:           vlanID,
+				primaryDevices:   make(map[int]int),
+				secondaryDevices: make(map[int]int),
+				commonDevices:    make(map[int]int),
+			}
+			g.nodeMap[vlanID] = node
 		}
+
 		port, _ := strconv.Atoi(v[1])
-		deviceID, _ := strconv.Atoi(v[2])
+		deviceID, _ := strconv.Atoi(v[0])
 		if port == 1 {
-			node.primaryDevices = append(node.primaryDevices, deviceID)
+			node.primaryDevices[deviceID] = 1
 		} else {
-			node.secondaryDevices = append(node.secondaryDevices, deviceID)
+			node.secondaryDevices[deviceID] = 1
 		}
 	}
 }
 
 type vlanNode struct {
 	nodeID           int
-	primaryDevices   []int
-	secondaryDevices []int
-	nodesCount       map[int]int
+	primaryDevices   map[int]int
+	secondaryDevices map[int]int
+	commonDevices    map[int]int
 }
 
-func (n *vlanNode) existsPrimarySecondary(deviceID int) {
-	
-}
-
+// Return a map of devices with count 2
 func mapper(arr []int) map[int]int {
+	temp := make(map[int]int)
 	res := make(map[int]int)
 	for _, v := range arr {
-		res[v]++
-		/*
-			if res[v] == 2 {
-				common = append(common, v)
-			}
-		*/
+		temp[v]++
+		if temp[v] == 2 {
+			res[v] = 2
+		}
 	}
 	return res
 }
 
-func (n *vlanNode) eat() {
-	n.primaryDevices = n.primaryDevices[1:]
-	n.secondaryDevices = n.secondaryDevices[1:]
-}
-func nonRedundant(n *vlanNode) int {
-	return n.primaryDevices[0]
-}
-
-func redundant(t map[int]int) int {
+func min(t map[int]int) int {
 	min := 0
-	for key, val := range t {
-		if val == 2 {
-			if min == 0 {
-				min = key
-			} else if min > key {
-				min = key
-			}
+	for key := range t {
+		if min == 0 {
+			min = key
+		} else if min > key {
+			min = key
 		}
-	}
-	// return some execessively high number
-	// Todo: make it less whacky
-	if min == 0 {
-		return 100000
 	}
 	return min
 }
-func perfromMapping(graph networkGraph, requests [][]string) {
-	// res := make([][]int, 0)
+func perfromMapping(graph *networkGraph, requests [][]string) [][]int {
+	vID := 1
+	res := make([][]int, 0)
 	for _, req := range requests {
 
 		r, _ := strconv.Atoi(req[1])
-		for keys := range graph.nodeMap {
-			switch r {
-			case 1:
-				a := redundant()
-				b := redundant(t1m)
-				c := redundant(t2m)
+		reqID, _ := strconv.Atoi(req[0])
 
-				// fmt.Println("red values:",a,b,c)
+		for {
+			// fmt.Println("---------------------------")
+			// fmt.Printf("reqid: %d\t redundancy: %d\t vid: %d\n", reqID, r, vID)
+			vNode := graph.nodeMap[vID]
 
-				if a < b && a < c || a == b || a == c {
-					fmt.Printf("redundant, device:%d, vland_id:%d\n", 0, a)
-					delete(t0m, a)
-					t0.eat()
-					// fmt.Println(t0)
-				} else if b < a && b < c || b == c {
-					fmt.Printf("redundant, device:%d, vland_id:%d\n", 1, b)
-					delete(t1m, b)
-					t1.eat()
-					// fmt.Println(t1)
-				} else {
-					fmt.Printf("redundant, device:%d, vland_id:%d\n", 2, c)
-					delete(t2m, c)
-					t2.eat()
-					// fmt.Println(t2)
+			if len(vNode.primaryDevices) == 0 {
+				vID++
+				// fmt.Println("next vid", vID)
+			}
+			vNode = graph.nodeMap[vID]
+
+			if r == 1 {
+				if len(vNode.primaryDevices) == 0 {
+					// fmt.Println("turning to next vid from vid", vID)
+					vID++
 				}
+				vNode = graph.nodeMap[vID]
 
-			case 0:
-				a := nonRedundant(t0)
-				b := nonRedundant(t1)
-				c := nonRedundant(t2)
+				deviceID := min(vNode.commonDevices)
+				delete(vNode.primaryDevices, deviceID)
+				delete(vNode.secondaryDevices, deviceID)
+				delete(vNode.commonDevices, deviceID)
 
-				// fmt.Println("non-values:",a,b,c)
-				if (a < b || a == b) && (a == c || a < c) {
-					fmt.Printf("non, device:%d, vland_id:%d\n", 0, a)
-					t0.nodes[0].nodes = t0.nodes[0].nodes[1:]
-					// fmt.Println(t0)
-				} else if b < a && (b < c || b == c) {
-					fmt.Printf("non, device:%d, vland_id:%d\n", 1, b)
-					t1.nodes[0].nodes = t1.nodes[0].nodes[1:]
-					// fmt.Println(t1)
-				} else {
-					fmt.Printf("non, device:%d, vland_id:%d\n", 2, c)
-					t2.nodes[0].nodes = t2.nodes[0].nodes[1:]
-					// fmt.Println(t2)
+				// res = append(res, []int{reqID, deviceID, 0, vID})
+				// res = append(res, []int{reqID, deviceID, 1, vID})
+				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 0, vID)
+				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 1, vID)
+				break
+
+			} else if r == 0 {
+				if len(vNode.primaryDevices) == 0 {
+					// fmt.Println("turning to next vid from vid", vID)
+					vID++
 				}
+				vNode = graph.nodeMap[vID]
+
+				deviceID := min(vNode.primaryDevices)
+				delete(vNode.primaryDevices, deviceID)
+
+				// res = append(res, []int{reqID, deviceID, 0, vID})
+				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 1, vID)
+				break
 			}
 		}
+
 	}
+	return nil
 }

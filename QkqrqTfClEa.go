@@ -109,32 +109,32 @@ func mai() {
 	}
 }
 
-// func (t *trie) eat() {
-// 	t.nodes[0].nodes = t.nodes[0].nodes[1:]
-// 	t.nodes[1].nodes = t.nodes[1].nodes[1:]
-// }
-// func nonRedundant(t *trie) int {
-// 	return t.nodes[0].nodes[0].value
-// }
+func (t *trie) eat() {
+	t.nodes[0].nodes = t.nodes[0].nodes[1:]
+	t.nodes[1].nodes = t.nodes[1].nodes[1:]
+}
+func nonRedundant(t *trie) int {
+	return t.nodes[0].nodes[0].value
+}
 
-// func redundant(t map[int]int) int {
-// 	min := 0
-// 	for key, val := range t {
-// 		if val == 2 {
-// 			if min == 0 {
-// 				min = key
-// 			} else if min > key {
-// 				min = key
-// 			}
-// 		}
-// 	}
-// 	// return some execessively high number
-// 	// Todo: make it less whacky
-// 	if min == 0 {
-// 		return 100000
-// 	}
-// 	return min
-// }
+func redundant(t map[int]int) int {
+	min := 0
+	for key, val := range t {
+		if val == 2 {
+			if min == 0 {
+				min = key
+			} else if min > key {
+				min = key
+			}
+		}
+	}
+	// return some execessively high number
+	// Todo: make it less whacky
+	if min == 0 {
+		return 100000
+	}
+	return min
+}
 
 func (t *trie) String() string {
 	s := ""

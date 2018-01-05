@@ -158,7 +158,8 @@ def perform_mapping(graph, requests, vlans_ids):
                     print(request_id, device_id, 1, current_vlan_id)
                     break
 
-            except ValueError:
+            except ValueError as e:
+                print("exception ",e)
                 current_index += 1
         
 
