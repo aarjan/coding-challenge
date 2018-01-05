@@ -125,7 +125,9 @@ def perform_mapping(graph, requests, vlans_ids):
     Step 6: If there is no device available, if bothe Step4 / Step5 fails, get the next availble
             lowest vlan node and repeat Step4/Step5
     """
-
+    # writer = csv.DictWriter(file,['request_id', 'device_id', 'primary_port', 'current_vlan_id'])
+    #writer = csv.writer(file)
+    row = [[]]
     for request in requests:
         request_id = request['request_id']
         current_index = 0
@@ -144,7 +146,8 @@ def perform_mapping(graph, requests, vlans_ids):
                     vlan_node.devices_secondary.remove(device_id)
                     if device_id in vlan_node.devices_common:
                         vlan_node.devices_common.remove(device_id)
-                    print(request_id, device_id, 1, current_vlan_id)
+                    row.append([request_id, device_id, 1, current_vlan_id])
+                    # print(request_id, device_id, 1, current_vlan_id)
                     break
                 
                 elif request['redundant'] == '1':
@@ -154,26 +157,28 @@ def perform_mapping(graph, requests, vlans_ids):
                         vlan_node.devices_secondary.remove(device_id)
                     if device_id in vlan_node.devices_primary:
                         vlan_node.devices_primary.remove(device_id)
-                    print(request_id, device_id, 0, current_vlan_id)
-                    print(request_id, device_id, 1, current_vlan_id)
+                    row.append([request_id, device_id, 0, current_vlan_id])
+                    row.append([request_id, device_id, 1, current_vlan_id])
+                    # print(request_id, device_id, 0, current_vlan_id)
+                    # print(request_id, device_id, 1, current_vlan_id)
                     break
 
-            except ValueError as e:
-                print("exception ",e)
+            except ValueError:
                 current_index += 1
-        
+    return row
 
 def main():
     import csv
-    vlans = list(csv.DictReader(open('test_vlans.csv')))
+    vlans = list(csv.DictReader(open('vlans.csv')))
     g = NetworkGraph(vlans)
     g.populate_graph()
-    print(g.id_vlan_node_map)
     vlan_ids = sorted(list(g.id_vlan_node_map.keys()))
-    requests = list(csv.DictReader(open('test_requests.csv')))
-    for keys in g.id_vlan_node_map:
-        print(keys,g.id_vlan_node_map[keys].devices_secondary,g.id_vlan_node_map[keys].devices_primary,g.id_vlan_node_map[keys].devices_common)
-    perform_mapping(g, requests, vlan_ids)
-    
+    requests = list(csv.DictReader(open('requests.csv')))
+    outputfile = open('rob.csv','w')
+    rows = perform_mapping(g, requests, vlan_ids)
+    writer = csv.writer(outputfile)
+    writer.writerows(rows)
+   
+    outputfile.close()
 if __name__=="__main__":
     main()

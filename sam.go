@@ -8,17 +8,19 @@ import (
 )
 
 func main() {
-	f1, _ := os.Open("test_vlans.csv")
-	f2, _ := os.Open("test_requests.csv")
+	f1, _ := os.Open("vlans.csv")
+	f2, _ := os.Open("requests.csv")
+	f3, _ := os.Create("output.csv")
 	defer f1.Close()
 	defer f2.Close()
+	defer f3.Close()
 
 	r1 := csv.NewReader(f1)
 	r2 := csv.NewReader(f2)
 
-	// vlans headers
+	// skip vlans headers
 	_, _ = r1.Read()
-	// request headers
+	// skip request headers
 	_, _ = r2.Read()
 
 	vlans, _ := r1.ReadAll()
@@ -26,7 +28,9 @@ func main() {
 
 	graph := NewGraph(vlans)
 	graph.populateGraph()
-	for key, val := range graph.nodeMap {
+
+	// Find the common devices for each vlan node
+	for _, val := range graph.nodeMap {
 		var keys []int
 		for k := range val.primaryDevices {
 			keys = append(keys, k)
@@ -34,13 +38,27 @@ func main() {
 		for k := range val.secondaryDevices {
 			keys = append(keys, k)
 		}
-		val.commonDevices = mapper(keys)
-		fmt.Printf("%#v,%#v\n", key, val)
+		val.commonDevices = uniqueCount(keys)
 	}
+
 	output := perfromMapping(graph, requests)
-	for _, o := range output {
-		fmt.Println(o)
+
+	writer := csv.NewWriter(f3)
+	// write headers
+	writer.Write([]string{"request_id", "device_id", "primary_port", "vlan_id"})
+	err := writer.WriteAll(output)
+	if err != nil {
+		fmt.Println(err)
 	}
+	writer.Flush()
+
+}
+
+type vlanNode struct {
+	nodeID           int
+	primaryDevices   map[int]int
+	secondaryDevices map[int]int
+	commonDevices    map[int]int
 }
 
 type networkGraph struct {
@@ -80,15 +98,8 @@ func (g *networkGraph) populateGraph() {
 	}
 }
 
-type vlanNode struct {
-	nodeID           int
-	primaryDevices   map[int]int
-	secondaryDevices map[int]int
-	commonDevices    map[int]int
-}
-
 // Return a map of devices with count 2
-func mapper(arr []int) map[int]int {
+func uniqueCount(arr []int) map[int]int {
 	temp := make(map[int]int)
 	res := make(map[int]int)
 	for _, v := range arr {
@@ -100,6 +111,7 @@ func mapper(arr []int) map[int]int {
 	return res
 }
 
+// Return the minimum value from a map
 func min(t map[int]int) int {
 	min := 0
 	for key := range t {
@@ -111,59 +123,56 @@ func min(t map[int]int) int {
 	}
 	return min
 }
-func perfromMapping(graph *networkGraph, requests [][]string) [][]int {
+
+func perfromMapping(graph *networkGraph, requests [][]string) [][]string {
 	vID := 1
-	res := make([][]int, 0)
+	res := make([][]string, 0)
 	for _, req := range requests {
 
 		r, _ := strconv.Atoi(req[1])
-		reqID, _ := strconv.Atoi(req[0])
 
 		for {
-			// fmt.Println("---------------------------")
-			// fmt.Printf("reqid: %d\t redundancy: %d\t vid: %d\n", reqID, r, vID)
 			vNode := graph.nodeMap[vID]
 
+			// If the node has nil primary devices increase the node id counter
 			if len(vNode.primaryDevices) == 0 {
 				vID++
-				// fmt.Println("next vid", vID)
-			}
-			vNode = graph.nodeMap[vID]
-
-			if r == 1 {
-				if len(vNode.primaryDevices) == 0 {
-					// fmt.Println("turning to next vid from vid", vID)
-					vID++
-				}
 				vNode = graph.nodeMap[vID]
+			}
+
+			switch r {
+			case 1:
+				if len(vNode.primaryDevices) == 0 {
+					vID++
+					vNode = graph.nodeMap[vID]
+				}
 
 				deviceID := min(vNode.commonDevices)
 				delete(vNode.primaryDevices, deviceID)
 				delete(vNode.secondaryDevices, deviceID)
 				delete(vNode.commonDevices, deviceID)
 
-				// res = append(res, []int{reqID, deviceID, 0, vID})
-				// res = append(res, []int{reqID, deviceID, 1, vID})
-				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 0, vID)
-				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 1, vID)
+				res = append(res, []string{req[0], strconv.Itoa(deviceID), strconv.Itoa(0), strconv.Itoa(vID)})
+				res = append(res, []string{req[0], strconv.Itoa(deviceID), strconv.Itoa(1), strconv.Itoa(vID)})
 				break
 
-			} else if r == 0 {
+			case 0:
 				if len(vNode.primaryDevices) == 0 {
-					// fmt.Println("turning to next vid from vid", vID)
 					vID++
+					vNode = graph.nodeMap[vID]
 				}
+				vNode = graph.nodeMap[vID]
 				vNode = graph.nodeMap[vID]
 
 				deviceID := min(vNode.primaryDevices)
 				delete(vNode.primaryDevices, deviceID)
 
-				// res = append(res, []int{reqID, deviceID, 0, vID})
-				fmt.Printf("req_id :%d\t device_id: %d\t port:%d\t vid: %d\n", reqID, deviceID, 1, vID)
+				res = append(res, []string{req[0], strconv.Itoa(deviceID), strconv.Itoa(1), strconv.Itoa(vID)})
 				break
 			}
+			break
 		}
 
 	}
-	return nil
+	return res
 }
