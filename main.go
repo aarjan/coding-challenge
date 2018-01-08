@@ -51,7 +51,6 @@ func main() {
 		fmt.Println(err)
 	}
 	writer.Flush()
-
 }
 
 type vlanNode struct {
@@ -127,26 +126,19 @@ func min(t map[int]int) int {
 func perfromMapping(graph *networkGraph, requests [][]string) [][]string {
 	vID := 1
 	res := make([][]string, 0)
+	var vNode *vlanNode
 	for _, req := range requests {
 
 		r, _ := strconv.Atoi(req[1])
 
 		for {
-			vNode := graph.nodeMap[vID]
+			vNode = graph.nodeMap[vID]
 
-			// If the node has nil primary devices increase the node id counter
-			if len(vNode.primaryDevices) == 0 {
-				vID++
-				vNode = graph.nodeMap[vID]
-			}
-
-			switch r {
-			case 1:
-				if len(vNode.primaryDevices) == 0 {
+			if r == 1 {
+				if len(vNode.commonDevices) == 0 {
 					vID++
-					vNode = graph.nodeMap[vID]
+					continue
 				}
-
 				deviceID := min(vNode.commonDevices)
 				delete(vNode.primaryDevices, deviceID)
 				delete(vNode.secondaryDevices, deviceID)
@@ -156,13 +148,11 @@ func perfromMapping(graph *networkGraph, requests [][]string) [][]string {
 				res = append(res, []string{req[0], strconv.Itoa(deviceID), strconv.Itoa(1), strconv.Itoa(vID)})
 				break
 
-			case 0:
+			} else {
 				if len(vNode.primaryDevices) == 0 {
 					vID++
-					vNode = graph.nodeMap[vID]
+					continue
 				}
-				vNode = graph.nodeMap[vID]
-				vNode = graph.nodeMap[vID]
 
 				deviceID := min(vNode.primaryDevices)
 				delete(vNode.primaryDevices, deviceID)
@@ -170,7 +160,7 @@ func perfromMapping(graph *networkGraph, requests [][]string) [][]string {
 				res = append(res, []string{req[0], strconv.Itoa(deviceID), strconv.Itoa(1), strconv.Itoa(vID)})
 				break
 			}
-			break
+
 		}
 
 	}
